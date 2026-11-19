@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "name": "Kezza Agent",
+    "slug": "kezza-agent",
+    "version": "1.0.0",
+    "scheme": "kezza-agent",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "plugins": ["expo-router", "expo-secure-store"],
+    "experiments": { "typedRoutes": true },
+    "ios": { "supportsTablet": false, "bundleIdentifier": "in.co.kezza.agent" },
+    "android": { "package": "in.co.kezza.agent" },
+    "web": { "bundler": "metro" }
+  }
+}

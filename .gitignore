@@ -2,8 +2,14 @@ node_modules/
 .expo/
 dist/
 web-build/
+# Local environment files may contain database credentials, signing keys, and
+# provider tokens. Keep templates tracked, but never commit active values.
 .env
+.env.*
+!.env.example
 backend/.env
+backend/.env.*
+!backend/.env.example
 backend/.venv/
 __pycache__/
 *.py[cod]

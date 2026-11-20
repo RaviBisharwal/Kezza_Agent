@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.config import APP_ENV
 from app.schemas.auth import (
+    AdminPasswordLoginSchema,
     OtpRequestSchema,
     OtpVerifySchema,
     TokenResponseSchema,
@@ -13,6 +14,7 @@ from app.schemas.auth import (
     UserRegisterSchema,
 )
 from app.services.auth_service import (
+    authenticate_admin,
     build_user_profile,
     create_access_token,
     get_current_user,
@@ -97,6 +99,28 @@ def verify_otp_endpoint(payload: OtpVerifySchema, db: Session = Depends(get_db))
         "token_type": "bearer",
         "user": profile,
     }
+
+
+@router.post("/admin/login", response_model=TokenResponseSchema)
+def admin_password_login_endpoint(
+    payload: AdminPasswordLoginSchema,
+    db: Session = Depends(get_db),
+):
+    """
+    Administrator sign in with email and password.
+    """
+    try:
+        token, profile = authenticate_admin(
+            email=payload.email,
+            password=payload.password,
+            db=db,
+        )
+        return TokenResponseSchema(access_token=token, user=UserProfileSchema(**profile))
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=str(exc),
+        ) from exc
 
 
 @router.post("/register", response_model=TokenResponseSchema)

@@ -1,0 +1,207 @@
+// Prisma mapping of the PostgreSQL schema currently used by backend/ (SQLAlchemy).
+// Keep this file in sync with backend/app/models and Alembic migrations.
+// The FastAPI application remains the schema owner; do not run `prisma db push`
+// against a shared database from this mapping.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String   @id @default(uuid()) @db.Uuid
+  phoneE164   String   @unique(map: "users_phone_e164_key") @map("phone_e164") @db.VarChar(20)
+  fullName    String   @map("full_name") @db.VarChar(150)
+  email       String?  @db.VarChar(255)
+  passwordHash String? @map("password_hash") @db.VarChar(255)
+  role        String   @default("patient") @db.VarChar(20)
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  patient                 Patient?
+  agent                   Agent?
+  referredPatients        Referral[]        @relation("ReferralPatientUser")
+  createdPointsEntries    PointsLedger[]    @relation("PointsCreatedBy")
+  approvedCommissions     CommissionLedger[] @relation("CommissionApprovedBy")
+
+  @@map("users")
+}
+
+model Branch {
+  id       String  @id @default(uuid()) @db.Uuid
+  code     String  @unique(map: "branches_code_key") @db.VarChar(30)
+  name     String  @db.VarChar(120)
+  city     String  @db.VarChar(100)
+  isActive Boolean @default(true) @map("is_active")
+
+  patients  Patient[]
+  referrals Referral[]
+  payments  Payment[]
+
+  @@map("branches")
+}
+
+model Patient {
+  id                String   @id @default(uuid()) @db.Uuid
+  userId            String   @unique(map: "patients_user_id_key") @map("user_id") @db.Uuid
+  preferredBranchId String?  @map("preferred_branch_id") @db.Uuid
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user            User           @relation(fields: [userId], references: [id])
+  preferredBranch Branch?        @relation(fields: [preferredBranchId], references: [id])
+  payments        Payment[]
+  pointsEntries   PointsLedger[]
+
+  @@map("patients")
+}
+
+model Agent {
+  id            String   @id @default(uuid()) @db.Uuid
+  userId        String   @unique(map: "agents_user_id_key") @map("user_id") @db.Uuid
+  agentCode     String   @unique(map: "agents_agent_code_key") @map("agent_code") @db.VarChar(40)
+  sponsorAgentId String? @map("sponsor_agent_id") @db.Uuid
+  status        String   @default("pending_verification") @db.VarChar(30)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user             User             @relation(fields: [userId], references: [id])
+  sponsor          Agent?           @relation("AgentSponsor", fields: [sponsorAgentId], references: [id])
+  sponsoredAgents  Agent[]          @relation("AgentSponsor")
+  referrals        Referral[]
+  commissions      CommissionLedger[]
+
+  @@index([sponsorAgentId], map: "ix_agents_sponsor_agent_id")
+  @@map("agents")
+}
+
+model Referral {
+  id                String    @id @default(uuid()) @db.Uuid
+  patientUserId     String?   @unique(map: "referrals_patient_user_id_key") @map("patient_user_id") @db.Uuid
+  patientName       String    @map("patient_name") @db.VarChar(150)
+  patientPhoneE164  String    @map("patient_phone_e164") @db.VarChar(20)
+  referringAgentId  String    @map("referring_agent_id") @db.Uuid
+  preferredBranchId String?   @map("preferred_branch_id") @db.Uuid
+  serviceInterest   String?   @map("service_interest") @db.VarChar(120)
+  status            String    @default("registered") @db.VarChar(30)
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  convertedAt       DateTime? @map("converted_at") @db.Timestamptz(6)
+
+  patientUser    User?             @relation("ReferralPatientUser", fields: [patientUserId], references: [id])
+  referringAgent Agent             @relation(fields: [referringAgentId], references: [id])
+  preferredBranch Branch?          @relation(fields: [preferredBranchId], references: [id])
+  commissions    CommissionLedger[]
+
+  @@index([referringAgentId, status], map: "ix_referrals_agent_status")
+  @@map("referrals")
+}
+
+model Payment {
+  id                String    @id @default(uuid()) @db.Uuid
+  patientId         String    @map("patient_id") @db.Uuid
+  branchId          String?   @map("branch_id") @db.Uuid
+  treatmentName     String    @map("treatment_name") @db.VarChar(150)
+  amountMinorUnits  Int       @map("amount_minor_units")
+  currency          String    @default("INR") @db.VarChar(10)
+  status            String    @default("verified") @db.VarChar(30)
+  paymentReference  String    @unique(map: "payments_payment_reference_key") @map("payment_reference") @db.VarChar(100)
+  verifiedAt        DateTime? @map("verified_at") @db.Timestamptz(6)
+  refundedAt        DateTime? @map("refunded_at") @db.Timestamptz(6)
+  refundReason      String?   @map("refund_reason") @db.VarChar(255)
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  patient       Patient           @relation(fields: [patientId], references: [id])
+  branch        Branch?           @relation(fields: [branchId], references: [id])
+  pointsEntries PointsLedger[]
+  commissions   CommissionLedger[]
+
+  @@index([patientId], map: "ix_payments_patient_id")
+  @@index([paymentReference], map: "ix_payments_reference")
+  @@map("payments")
+}
+
+model PointsLedger {
+  id                String   @id @default(uuid()) @db.Uuid
+  patientId         String   @map("patient_id") @db.Uuid
+  paymentId         String?  @map("payment_id") @db.Uuid
+  createdByUserId   String?  @map("created_by_user_id") @db.Uuid
+  reversalOfId      String?  @unique(map: "uq_points_ledger_reversal_of_id") @map("reversal_of_id") @db.Uuid
+  points            Int
+  balanceAfter      Int      @map("balance_after")
+  eventType         String   @map("event_type") @db.VarChar(40)
+  description       String   @db.VarChar(255)
+  policyVersion     String   @default("inr_v1") @map("policy_version") @db.VarChar(30)
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  patient          Patient        @relation(fields: [patientId], references: [id])
+  payment          Payment?       @relation(fields: [paymentId], references: [id])
+  createdBy        User?          @relation("PointsCreatedBy", fields: [createdByUserId], references: [id])
+  reversalOf       PointsLedger?  @relation("PointsReversal", fields: [reversalOfId], references: [id])
+  reversalEntries  PointsLedger[] @relation("PointsReversal")
+
+  @@index([patientId], map: "ix_points_patient_id")
+  @@map("points_ledger")
+}
+
+model CommissionTier {
+  id                       String  @id @default(uuid()) @db.Uuid
+  name                     String  @db.VarChar(50)
+  minEligibleDirectAgents  Int     @map("min_eligible_direct_agents")
+  commissionPercent       Decimal @map("commission_percent") @db.Decimal(12, 8)
+  isActive                 Boolean @default(true) @map("is_active")
+
+  @@unique([minEligibleDirectAgents], map: "uq_commission_tiers_min_direct_agents")
+  @@index([isActive, minEligibleDirectAgents], map: "ix_commission_tiers_active_min_agents")
+  @@map("commission_tiers")
+}
+
+model LegacyCommissionTier {
+  id               String  @id @db.Uuid
+  name             String  @db.VarChar(50)
+  minSalesCount    Int     @map("min_sales_count")
+  commissionPercent Float   @map("commission_percent")
+  isActive         Boolean @map("is_active")
+
+  @@map("commission_tiers_legacy")
+}
+
+model CommissionLedger {
+  id                  String    @id @default(uuid()) @db.Uuid
+  agentId             String    @map("agent_id") @db.Uuid
+  referralId          String?   @map("referral_id") @db.Uuid
+  paymentId           String    @map("payment_id") @db.Uuid
+  tierPercent         Decimal   @map("tier_percent") @db.Decimal(12, 8)
+  tierName            String?   @map("tier_name") @db.VarChar(50)
+  eligibleDirectAgents Int?     @map("eligible_direct_agents")
+  amountMinorUnits    Int       @map("amount_minor_units")
+  reversalOfId        String?   @unique(map: "uq_commission_ledger_reversal_of_id") @map("reversal_of_id") @db.Uuid
+  status              String    @default("approved") @db.VarChar(30)
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  approvedAt          DateTime? @map("approved_at") @db.Timestamptz(6)
+  approvedByUserId    String?   @map("approved_by_user_id") @db.Uuid
+  paidAt              DateTime? @map("paid_at") @db.Timestamptz(6)
+
+  agent            Agent              @relation(fields: [agentId], references: [id])
+  referral         Referral?          @relation(fields: [referralId], references: [id])
+  payment          Payment            @relation(fields: [paymentId], references: [id])
+  approvedBy       User?              @relation("CommissionApprovedBy", fields: [approvedByUserId], references: [id])
+  reversalOf       CommissionLedger?  @relation("CommissionReversal", fields: [reversalOfId], references: [id])
+  reversalEntries  CommissionLedger[] @relation("CommissionReversal")
+
+  @@index([agentId, status], map: "ix_commission_agent_status")
+  @@map("commission_ledger")
+}
+
+model OtpRequest {
+  id         String   @id @default(uuid()) @db.Uuid
+  phoneE164  String   @map("phone_e164") @db.VarChar(20)
+  otpCode    String   @map("otp_code") @db.VarChar(10)
+  expiresAt  DateTime @map("expires_at") @db.Timestamptz(6)
+  isVerified Boolean  @default(false) @map("is_verified")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([phoneE164, otpCode], map: "ix_otp_phone_code")
+  @@map("otp_requests")
+}

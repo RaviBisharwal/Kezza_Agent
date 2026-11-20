@@ -14,8 +14,45 @@ The FastAPI service is included in this project under `backend/`. It runs separa
 | Referral history | `GET /api/v1/referrals` | Read the authenticated agent's patient referrals and current statuses. |
 | Create patient lead | `POST /api/v1/referrals/lead` | Store a referral lead for the authenticated agent. |
 | Commission wallet | `GET /api/v1/wallet/agent` | Read commission tier, earnings totals, and commission ledger. |
+| Pending commissions | `GET /api/v1/admin/commissions/pending` | Admin: review all commissions awaiting approval. |
+| Approve commission | `POST /api/v1/admin/commissions/{id}/approve` | Admin: approve a specific pending commission. |
+| Approve all commissions | `POST /api/v1/admin/commissions/approve-all` | Admin: batch-approve all pending commissions. |
+| Platform overview | `GET /api/v1/admin/overview` | Admin: registered/active patient and agent counts, referral/branch totals, INR points totals, verified payments, pending and approved commissions. |
+| Referral tracking | `GET /api/v1/admin/referrals` | Admin: latest 200 referrals with patient, partner, branch and status details. |
+| Branch reports | `GET /api/v1/admin/reports/branches` | Admin: verified payment count and revenue by branch. |
+| Patient search | `GET /api/v1/admin/patients/search?query=...` | Admin: search active patients by name or phone, including current INR points balance. |
+| Audited points credit | `POST /api/v1/admin/patients/{patient_id}/points` | Admin: append a positive patient points adjustment with reason and acting admin recorded in the ledger. |
+| Verify collected payment | `POST /api/v1/payments/verify-collected` | Integration: record payment, auto-convert referral, auto-calculate commission. |
 
 Every request after authentication uses the server-issued bearer token. The mobile client never writes to PostgreSQL or changes a reward balance directly.
+
+## Current admin dashboard coverage
+
+The admin screen uses the existing FastAPI/JWT stack. Its workflow is: sign in as a provisioned admin, review live overview totals, inspect recent referrals and branch revenue, search a patient and optionally issue a reasoned points credit, then review and approve pending commissions. Manual point credits are append-only ledger entries tied to the acting admin and reason. Commission approval and points credit refresh the relevant overview data.
+
+The current backend does not provide redemption request handling, a complete patient profile/payment history endpoint, partner directory/leaderboard, monthly or treatment revenue series, recent activity feed, admin/role management, settings, or a general audit-log query. The dashboard does not present these as live features until those server APIs and authorization rules exist. The overview reports actual ledger totals; point balances use the current INR policy version.
+
+## Commission Lifecycle & Admin Approval
+
+1. **Automatic Commission Calculation**:
+   - When a patient payment is confirmed (via `POST /api/v1/payments/verify-collected` or the admin CLI), the backend automatically looks up the attributed referral.
+   - It checks the referring agent's active direct agent network to determine their tier (`Base (1%)` up to `10%`).
+   - It computes the commission exact to the paise (`amount * tier_percent / 100`).
+   - It marks the referral status as `converted` and appends an entry to `commission_ledger` with `status="pending"`.
+
+2. **Admin Review & Approval**:
+   - The agent sees the newly calculated commission immediately in their mobile app under **"Pending admin approval"** with an amber status badge.
+   - The Kezza administrator reviews pending commissions and approves them:
+     - Via CLI: `npm run admin -- pending` then `npm run admin -- approve --all` (or `--id <uuid>`)
+     - Via API: `POST /api/v1/admin/commissions/{id}/approve` or `POST /api/v1/admin/commissions/approve-all`
+   - Once approved, the funds move into the agent's **"Approved"** balance and increment **"Total earned"**.
+
+3. **CLI Management Commands**:
+   - `npm run admin -- pending`: List all pending commissions.
+   - `npm run admin -- approve --all`: Approve all pending commissions.
+   - `npm run admin -- approve --id <id>`: Approve a specific commission.
+   - `npm run admin -- record-payment --patient-phone <+91...> --treatment "Dental Cleaning" --amount 25000`: Record a treatment payment and auto-calculate agent commission.
+   - `npm run admin -- provision --phone <+91...> --name "Admin Name"`: Provision a new admin user.
 
 ## Agent points are a backend feature gap
 

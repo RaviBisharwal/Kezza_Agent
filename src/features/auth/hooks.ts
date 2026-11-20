@@ -20,3 +20,10 @@ export function useRegisterAgent() {
       (await api.post<AgentAuthResponse>('/auth/register', payload)).data,
   });
 }
+
+export function useAdminLogin() {
+  return useMutation({
+    mutationFn: async (payload: { email: string; password: string }) =>
+      (await api.post<AgentAuthResponse>('/auth/admin/login', payload)).data,
+  });
+}

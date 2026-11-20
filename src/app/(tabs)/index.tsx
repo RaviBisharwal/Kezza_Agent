@@ -52,8 +52,8 @@ export default function OverviewScreen() {
         <View style={styles.cardHead}><Text style={styles.inviteEyebrow}>YOUR REFERRAL CODE</Text><Text style={styles.code}>{code.data?.agent_code ?? '—'}</Text></View>
         <Text style={styles.cardCopy}>Share your code with a patient or add their details directly to track the referral.</Text>
         <View style={styles.actionRow}>
-          <View style={styles.actionCell}><Button variant="secondary" onPress={copyCode}>{copied ? 'Copied' : 'Copy code'}</Button></View>
-          <View style={styles.actionCell}><Button variant="secondary" onPress={shareLink}>Share link</Button></View>
+          <View style={styles.actionCell}><Button variant="onDark" onPress={copyCode}>{copied ? 'Copied' : 'Copy code'}</Button></View>
+          <View style={styles.actionCell}><Button variant="onDark" onPress={shareLink}>Share link</Button></View>
         </View>
       </Card>
 
@@ -92,11 +92,11 @@ const styles = StyleSheet.create({
   stat: { flex: 1, minHeight: 84, borderRadius: 16, backgroundColor: Colors.white, borderColor: Colors.line, borderWidth: 1, padding: Space.md, justifyContent: 'center', gap: 4 },
   statValue: { color: Colors.ink, fontSize: 23, fontWeight: '900' },
   statLabel: { color: Colors.inkMuted, fontSize: 11, fontWeight: '700', lineHeight: 15 },
-  inviteCard: { backgroundColor: Colors.ink, borderColor: Colors.ink, paddingVertical: Space.xl },
+  inviteCard: { backgroundColor: '#111A34', borderColor: '#111A34', paddingVertical: Space.xl, borderRadius: 28 },
   cardHead: { gap: Space.xs },
-  inviteEyebrow: { color: '#B8D9D4', fontSize: 10, fontWeight: '900', letterSpacing: 1.3 },
+  inviteEyebrow: { color: '#9BE7EE', fontSize: 10, fontWeight: '900', letterSpacing: 1.3 },
   code: { color: Colors.white, fontSize: 29, letterSpacing: 2, fontWeight: '900' },
-  cardCopy: { color: '#D9E8E5', fontSize: 13, lineHeight: 19 },
+  cardCopy: { color: '#D5F5F8', fontSize: 13, lineHeight: 19 },
   actionRow: { flexDirection: 'row', gap: Space.md },
   actionCell: { flex: 1 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: Space.sm },

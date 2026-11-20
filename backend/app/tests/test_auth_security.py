@@ -32,7 +32,9 @@ from app.services.auth_service import (
     _otp_digest,
     create_access_token,
     decode_access_token,
+    hash_password,
     verify_otp_code,
+    verify_password,
 )
 
 
@@ -552,6 +554,56 @@ class AuthenticationSecurityTests(unittest.TestCase):
         signature = encode(hmac.new(JWT_SECRET.encode(), unsigned.encode(), hashlib.sha256).digest())
         with self.assertRaises(ValueError):
             decode_access_token(f"{unsigned}.{signature}")
+
+    def test_admin_password_login_lifecycle(self):
+        # 1. Create an admin user with hashed password
+        password = "AdminSecretPassword123!"
+        admin_user = User(
+            phone_e164="+919999000001",
+            full_name="Kezza Admin",
+            email="admin@kezza.com",
+            role="admin",
+            password_hash=hash_password(password),
+            is_active=True,
+        )
+        self.db.add(admin_user)
+        self.db.commit()
+
+        # 2. Login with correct credentials (case-insensitive email)
+        res = self.client.post(
+            "/api/v1/auth/admin/login",
+            json={"email": "ADMIN@KEZZA.COM", "password": password},
+        )
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertIn("access_token", data)
+        self.assertEqual(data["user"]["role"], "admin")
+        self.assertEqual(data["user"]["email"], "admin@kezza.com")
+
+        # 3. Login with wrong password
+        res_bad_pw = self.client.post(
+            "/api/v1/auth/admin/login",
+            json={"email": "admin@kezza.com", "password": "WrongPassword999"},
+        )
+        self.assertEqual(res_bad_pw.status_code, 401)
+
+        # 4. Login with non-admin account fails
+        agent_user = User(
+            phone_e164="+919999000002",
+            full_name="Agent User",
+            email="agent@kezza.com",
+            role="agent",
+            password_hash=hash_password(password),
+            is_active=True,
+        )
+        self.db.add(agent_user)
+        self.db.commit()
+
+        res_agent = self.client.post(
+            "/api/v1/auth/admin/login",
+            json={"email": "agent@kezza.com", "password": password},
+        )
+        self.assertEqual(res_agent.status_code, 401)
 
 
 if __name__ == "__main__":

@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -391,3 +391,73 @@ def get_current_admin(
             detail="Administrator access required",
         )
     return current_user
+
+
+PASSWORD_HASH_ALGO = "pbkdf2_sha256"
+PASSWORD_HASH_ROUNDS = 260_000
+
+
+def hash_password(password: str) -> str:
+    """Hash password using PBKDF2-HMAC-SHA256 with 260,000 iterations and 16-byte random salt."""
+    salt = secrets.token_bytes(16)
+    derived = hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        salt,
+        PASSWORD_HASH_ROUNDS,
+        dklen=32,
+    )
+    salt_b64 = _b64url_encode(salt)
+    hash_b64 = _b64url_encode(derived)
+    return f"{PASSWORD_HASH_ALGO}${PASSWORD_HASH_ROUNDS}${salt_b64}${hash_b64}"
+
+
+def verify_password(plain_password: str, stored_hash: str) -> bool:
+    """Verify password in constant time."""
+    try:
+        parts = stored_hash.split("$")
+        if len(parts) != 4 or parts[0] != PASSWORD_HASH_ALGO:
+            return False
+        iterations = int(parts[1])
+        salt = _b64url_decode(parts[2])
+        expected = _b64url_decode(parts[3])
+        computed = hashlib.pbkdf2_hmac(
+            "sha256",
+            plain_password.encode("utf-8"),
+            salt,
+            iterations,
+            dklen=len(expected),
+        )
+        return hmac.compare_digest(computed, expected)
+    except Exception:
+        return False
+
+
+def authenticate_admin(
+    email: str,
+    password: str,
+    db: Session,
+) -> tuple[str, dict]:
+    """Authenticate an administrator by email and password stored in the database."""
+    cleaned_email = email.strip().lower()
+    user = db.scalar(
+        select(User).where(func.lower(User.email) == cleaned_email)
+    )
+    if not user or user.role != "admin":
+        raise ValueError("Invalid administrator email or password")
+
+    if not user.is_active:
+        raise ValueError("Administrator account is inactive. Please contact support.")
+
+    if not user.password_hash or not verify_password(password, user.password_hash):
+        raise ValueError("Invalid administrator email or password")
+
+    profile = build_user_profile(user, db)
+    token = create_access_token({
+        "sub": str(user.id),
+        "phone": user.phone_e164,
+        "email": user.email,
+        "role": "admin",
+    })
+
+    return token, profile

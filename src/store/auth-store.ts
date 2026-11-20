@@ -6,7 +6,9 @@ export type AgentUser = {
   id: string;
   fullName: string;
   phone: string;
-  agentId: string;
+  email?: string;
+  role?: string;
+  agentId?: string;
   agentCode?: string;
 };
 
@@ -44,7 +46,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       const [token, userJson] = await Promise.all([getItem(TOKEN_KEY), getItem(USER_KEY)]);
       if (token && userJson) {
         const user = JSON.parse(userJson) as AgentUser;
-        if (user.agentId) set({ accessToken: token, user });
+        if (user.agentId || user.role === 'admin') set({ accessToken: token, user });
       }
     } catch { /* Treat invalid saved data as a signed-out session. */ }
     finally { set({ isHydrated: true }); }

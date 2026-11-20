@@ -6,13 +6,14 @@ export function Button({ children, onPress, loading = false, disabled = false, v
   onPress: () => void;
   loading?: boolean;
   disabled?: boolean;
-  variant?: 'primary' | 'secondary' | 'quiet';
+  variant?: 'primary' | 'secondary' | 'quiet' | 'onDark';
 }>) {
   const secondary = variant === 'secondary';
   const quiet = variant === 'quiet';
+  const onDark = variant === 'onDark';
   return (
-    <Pressable disabled={disabled || loading} onPress={onPress} style={({ pressed }) => [styles.button, secondary && styles.secondary, quiet && styles.quiet, (disabled || loading) && styles.disabled, pressed && styles.pressed]}>
-      {loading ? <ActivityIndicator color={secondary || quiet ? Colors.teal : Colors.white} /> : <Text style={[styles.label, (secondary || quiet) && styles.secondaryLabel]}>{children}</Text>}
+    <Pressable disabled={disabled || loading} onPress={onPress} style={({ pressed }) => [styles.button, secondary && styles.secondary, quiet && styles.quiet, onDark && styles.onDark, (disabled || loading) && styles.disabled, pressed && styles.pressed]}>
+      {loading ? <ActivityIndicator color={secondary || quiet || onDark ? Colors.tealDark : Colors.white} /> : <Text style={[styles.label, (secondary || quiet || onDark) && styles.secondaryLabel]}>{children}</Text>}
     </Pressable>
   );
 }
@@ -23,8 +24,9 @@ export function InlineNotice({ children, tone = 'info' }: PropsWithChildren<{ to
 }
 
 const styles = StyleSheet.create({
-  button: { minHeight: 52, borderRadius: 14, backgroundColor: Colors.teal, alignItems: 'center', justifyContent: 'center', paddingHorizontal: Space.xl },
-  secondary: { backgroundColor: Colors.softTeal, borderColor: '#C6E1DA', borderWidth: 1 },
+  button: { minHeight: 52, borderRadius: 18, backgroundColor: Colors.teal, alignItems: 'center', justifyContent: 'center', paddingHorizontal: Space.xl },
+  secondary: { backgroundColor: Colors.softTeal, borderColor: Colors.line, borderWidth: 1 },
+  onDark: { backgroundColor: '#E4F8FB', borderColor: '#BDE9F0', borderWidth: 1 },
   quiet: { backgroundColor: 'transparent' },
   disabled: { opacity: 0.5 },
   pressed: { opacity: 0.78 },

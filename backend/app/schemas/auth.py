@@ -42,3 +42,8 @@ class TokenResponseSchema(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserProfileSchema
+
+
+class AdminPasswordLoginSchema(BaseModel):
+    email: str = Field(..., min_length=3, max_length=255, description="Administrator email address")
+    password: str = Field(..., min_length=6, max_length=128, description="Administrator password")

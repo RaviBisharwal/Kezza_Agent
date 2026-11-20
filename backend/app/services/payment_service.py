@@ -12,6 +12,7 @@ from app.models.patient import Patient
 from app.models.payment import Payment
 from app.models.points import PointsLedger
 from app.models.referral import Referral
+from app.models.user import User
 
 MINOR_UNITS_PER_RUPEE = Decimal("100")
 POINTS_PER_RUPEE = 1
@@ -137,6 +138,19 @@ def process_treatment_payment(
             .where(Referral.patient_user_id == patient.user_id)
             .with_for_update()
         ).first()
+
+        # If not linked by user_id yet, link by patient phone number
+        if not referral:
+            patient_user = db.get(User, patient.user_id)
+            if patient_user and patient_user.phone_e164:
+                referral = db.scalars(
+                    select(Referral)
+                    .where(Referral.patient_phone_e164 == patient_user.phone_e164)
+                    .with_for_update()
+                ).first()
+                if referral and referral.patient_user_id is None:
+                    referral.patient_user_id = patient.user_id
+
         if referral:
             if referral.status != "converted":
                 referral.status = "converted"

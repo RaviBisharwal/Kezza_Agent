@@ -9,10 +9,79 @@ from app.models.commission import CommissionLedger
 from app.models.patient import Patient
 from app.models.payment import Payment
 from app.models.points import PointsLedger
+from app.models.branch import Branch
+from app.models.referral import Referral
 from app.models.user import User
 from app.services.payment_service import INR_POLICY_VERSION
 
 MAX_MANUAL_POINTS = 1_000_000
+
+
+def get_admin_overview(db: Session) -> dict:
+    """Return live platform totals from the existing ledgers and records."""
+    def count(model, *criteria):
+        return int(db.scalar(select(func.count()).select_from(model).where(*criteria)) or 0)
+
+    active_patients = int(db.scalar(
+        select(func.count()).select_from(Patient)
+        .join(User, User.id == Patient.user_id).where(User.is_active.is_(True))
+    ) or 0)
+    issued_points = int(db.scalar(select(func.coalesce(func.sum(PointsLedger.points), 0)).where(PointsLedger.policy_version == INR_POLICY_VERSION, PointsLedger.points > 0)) or 0)
+    redeemed_points = int(db.scalar(select(func.coalesce(func.sum(-PointsLedger.points), 0)).where(PointsLedger.policy_version == INR_POLICY_VERSION, PointsLedger.event_type == "redemption", PointsLedger.points < 0)) or 0)
+    available_points = int(db.scalar(select(func.coalesce(func.sum(PointsLedger.points), 0)).where(PointsLedger.policy_version == INR_POLICY_VERSION)) or 0)
+    approved_commissions = int(db.scalar(
+        select(func.coalesce(func.sum(CommissionLedger.amount_minor_units), 0))
+        .join(Payment, Payment.id == CommissionLedger.payment_id)
+        .where(CommissionLedger.status == "approved", Payment.currency == "INR")
+    ) or 0)
+    return {
+        "patients": count(Patient),
+        "active_patients": active_patients,
+        "active_agents": count(Agent, Agent.status == "active"),
+        "pending_commissions": count(CommissionLedger, CommissionLedger.status == "pending"),
+        "active_branches": count(Branch, Branch.is_active.is_(True)),
+        "open_referrals": count(Referral, Referral.status.in_(["registered", "contacted", "consultation_booked"])),
+        "loyalty_points_issued": issued_points,
+        "loyalty_points_redeemed": redeemed_points,
+        "loyalty_points_available": available_points,
+        "approved_commissions_minor_units": approved_commissions,
+        "verified_payments_minor_units": int(db.scalar(select(func.coalesce(func.sum(Payment.amount_minor_units), 0)).where(Payment.status == "verified", Payment.currency == "INR")) or 0),
+        "currency": "INR",
+    }
+
+
+def list_admin_referrals(db: Session) -> list[dict]:
+    rows = db.execute(
+        select(Referral, Agent.agent_code, User.full_name, Branch.name)
+        .join(Agent, Agent.id == Referral.referring_agent_id)
+        .join(User, User.id == Agent.user_id)
+        .outerjoin(Branch, Branch.id == Referral.preferred_branch_id)
+        .order_by(Referral.created_at.desc())
+        .limit(200)
+    ).all()
+    return [{
+        "referral_id": str(ref.id), "patient_name": ref.patient_name,
+        "patient_phone_e164": ref.patient_phone_e164, "status": ref.status,
+        "service_interest": ref.service_interest, "agent_code": code,
+        "agent_name": agent_name, "branch_name": branch_name,
+        "created_at": ref.created_at.isoformat() if ref.created_at else "",
+    } for ref, code, agent_name, branch_name in rows]
+
+
+def list_branch_financials(db: Session) -> list[dict]:
+    rows = db.execute(
+        select(
+            Branch.id, Branch.code, Branch.name, Branch.city, Branch.is_active,
+            func.count(Payment.id).label("payments"),
+            func.coalesce(func.sum(Payment.amount_minor_units), 0).label("revenue"),
+        )
+        .outerjoin(Payment, and_(Payment.branch_id == Branch.id, Payment.status == "verified", Payment.currency == "INR"))
+        .group_by(Branch.id, Branch.code, Branch.name, Branch.city, Branch.is_active)
+        .order_by(Branch.name.asc())
+    ).all()
+    return [{"branch_id": str(row.id), "code": row.code, "name": row.name,
+        "city": row.city, "is_active": row.is_active, "verified_payments": row.payments,
+        "verified_revenue_minor_units": int(row.revenue), "currency": "INR"} for row in rows]
 
 
 def search_patients(query: str, db: Session) -> list[dict]:
@@ -151,6 +220,33 @@ def approve_commission(
         "commission_id": str(commission.id),
         "status": commission.status,
         "approved_at": commission.approved_at.isoformat(),
+        "approved_by_user_id": str(admin_user_id),
+    }
+
+
+def approve_all_pending_commissions(
+    admin_user_id: uuid.UUID,
+    db: Session,
+) -> dict:
+    """Approve all currently pending commissions."""
+    pending_commissions = db.scalars(
+        select(CommissionLedger.id).where(CommissionLedger.status == "pending")
+    ).all()
+
+    approved_ids = []
+    failed_count = 0
+    for comm_id in pending_commissions:
+        try:
+            res = approve_commission(comm_id, admin_user_id, db)
+            approved_ids.append(res["commission_id"])
+        except Exception:
+            failed_count += 1
+            continue
+
+    return {
+        "approved_count": len(approved_ids),
+        "failed_count": failed_count,
+        "approved_commission_ids": approved_ids,
         "approved_by_user_id": str(admin_user_id),
     }
 

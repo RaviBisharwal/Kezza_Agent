@@ -3,7 +3,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { StyleSheet, Text } from 'react-native';
 import { Button, InlineNotice } from '@/components/Button';
 import { FormField } from '@/components/FormField';
-import { Card, PageHeading, Screen } from '@/components/Screen';
+import { BackBar, Card, PageHeading, Screen } from '@/components/Screen';
 import { Colors } from '@/constants/theme';
 import { useRegisterAgent } from '@/features/auth/hooks';
 import { getErrorMessage } from '@/lib/errors';
@@ -31,7 +31,7 @@ export default function RegisterScreen() {
   }
 
   return (
-    <Screen>
+    <Screen header={<BackBar label="Verify number" />}>
       <PageHeading eyebrow="Agent profile" title="Complete your setup" subtitle="Your mobile number is verified. Add your name to create your agent profile." />
       <Card>
         <FormField label="Full name" value={name} onChangeText={setName} placeholder="Enter your full name" autoCapitalize="words" maxLength={150} />

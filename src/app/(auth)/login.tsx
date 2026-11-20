@@ -15,6 +15,11 @@ export default function LoginScreen() {
   const requestOtp = useRequestOtp();
   const normalized = normalizeIndianMobile(phone);
 
+  function handlePhoneChange(value: string) {
+    setPhone(normalizeIndianMobile(value));
+    if (error) setError('');
+  }
+
   async function submit() {
     setError('');
     if (!isIndianMobile(normalized)) { setError('Enter a valid 10-digit Indian mobile number.'); return; }
@@ -31,11 +36,34 @@ export default function LoginScreen() {
       <Card>
         <Text style={styles.cardTitle}>Secure sign in</Text>
         <Text style={styles.body}>We’ll send a one-time verification code to your mobile number.</Text>
-        <FormField label="Mobile number" value={phone} onChangeText={setPhone} placeholder="98765 43210" keyboardType="phone-pad" maxLength={14} />
+        <FormField
+          label="Mobile number"
+          value={phone}
+          onChangeText={handlePhoneChange}
+          placeholder="9876543210"
+          keyboardType="number-pad"
+          maxLength={10}
+          prefix="+91"
+        />
+        <Text style={styles.helper}>Enter your 10-digit mobile number.</Text>
         {error ? <InlineNotice tone="error">{error}</InlineNotice> : null}
         <Button onPress={submit} loading={requestOtp.isPending}>Continue with OTP</Button>
       </Card>
-      <Text style={styles.footnote}>Agent accounts only · Your session is stored securely on this device.</Text>
+
+      <View style={styles.adminDivider}>
+        <View style={styles.dividerLine} />
+        <Text style={styles.dividerText}>MANAGEMENT</Text>
+        <View style={styles.dividerLine} />
+      </View>
+
+      <Button
+        variant="secondary"
+        onPress={() => router.push('/(auth)/admin-login')}
+      >
+        Sign in as Administrator
+      </Button>
+
+      <Text style={styles.footnote}>Agent & Administrator workspaces · Secure session management.</Text>
     </Screen>
   );
 }
@@ -48,5 +76,9 @@ const styles = StyleSheet.create({
   brandAccent: { color: Colors.teal },
   cardTitle: { fontSize: 19, fontWeight: '800', color: Colors.ink },
   body: { color: Colors.inkMuted, fontSize: 14, lineHeight: 21 },
-  footnote: { marginTop: 'auto', paddingTop: Space.xxxl, textAlign: 'center', color: Colors.inkMuted, fontSize: 12, lineHeight: 18 },
+  helper: { color: Colors.inkMuted, fontSize: 12, lineHeight: 18, marginTop: -Space.xs },
+  adminDivider: { flexDirection: 'row', alignItems: 'center', gap: Space.md, marginVertical: Space.sm },
+  dividerLine: { flex: 1, height: 1, backgroundColor: Colors.line },
+  dividerText: { color: Colors.inkMuted, fontSize: 11, fontWeight: '800', letterSpacing: 1 },
+  footnote: { marginTop: 'auto', paddingTop: Space.xl, textAlign: 'center', color: Colors.inkMuted, fontSize: 12, lineHeight: 18 },
 });

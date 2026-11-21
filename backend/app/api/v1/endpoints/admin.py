@@ -5,6 +5,8 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.schemas.admin import AdminPointsGrantSchema
+from app.schemas.payments import ManualPaymentCreateSchema, PaymentResponseSchema
+from app.services.payment_service import process_treatment_payment
 from app.services.admin_service import (
     approve_all_pending_commissions,
     approve_commission,
@@ -123,3 +125,37 @@ def grant_patient_points_endpoint(
             else status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(exc),
         ) from exc
+
+
+@router.post("/payments", response_model=PaymentResponseSchema)
+def record_manual_payment_endpoint(
+    payload: ManualPaymentCreateSchema,
+    current_admin: dict = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """Record a payment the clinic already collected outside Kezza.
+
+    Not provider-verified: the admin attests collection. Runs in one
+    transaction; a reused reference is rejected with 409 and awards nothing.
+    """
+    try:
+        result = process_treatment_payment(
+            patient_id=payload.patient_id,
+            treatment_name=payload.treatment_name,
+            amount_rupees=payload.amount_rupees,
+            payment_reference=payload.payment_reference,
+            branch_id=payload.branch_id,
+            db=db,
+            recorded_by_user_id=uuid.UUID(current_admin["id"]),
+        )
+        return PaymentResponseSchema(**result)
+    except ValueError as exc:
+        message = str(exc)
+        lowered = message.lower()
+        if "already" in lowered:
+            code = status.HTTP_409_CONFLICT
+        elif "not found" in lowered:
+            code = status.HTTP_404_NOT_FOUND
+        else:
+            code = status.HTTP_422_UNPROCESSABLE_ENTITY
+        raise HTTPException(status_code=code, detail=message) from exc

@@ -7,6 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.agent import Agent
+from app.models.branch import Branch
 from app.models.commission import CommissionLedger, CommissionTier
 from app.models.patient import Patient
 from app.models.payment import Payment
@@ -74,6 +75,7 @@ def process_treatment_payment(
     payment_reference: str,
     branch_id: uuid.UUID | None,
     db: Session,
+    recorded_by_user_id: uuid.UUID | None = None,
 ) -> dict:
     """Record a trusted collected INR payment and append financial ledger rows.
 
@@ -88,6 +90,11 @@ def process_treatment_payment(
         )
         if not patient:
             raise ValueError("Patient not found")
+
+        if branch_id is not None:
+            branch = db.get(Branch, branch_id)
+            if not branch or not branch.is_active:
+                raise ValueError("Invalid or inactive branch")
 
         if db.scalar(
             select(Payment.id).where(Payment.payment_reference == payment_reference)
@@ -126,7 +133,12 @@ def process_treatment_payment(
             points=points_earned,
             balance_after=new_points_balance,
             event_type="treatment_reward",
-            description=f"Reward points for {treatment_name}",
+            description=(
+                f"Reward points for {treatment_name}"
+                if recorded_by_user_id is None
+                else f"Reward points for {treatment_name} (recorded by clinic admin)"
+            ),
+            created_by_user_id=recorded_by_user_id,
             policy_version=INR_POLICY_VERSION,
         )
         db.add(reward)
